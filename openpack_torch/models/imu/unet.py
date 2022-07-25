@@ -132,6 +132,7 @@ class UNet(nn.Module):
         d3 = self.decoder3(d4)
         e33 = self.decoder3(e3)
         #d3 = d3 + e33
+        print('e4:',e4.shape)
         print('d4:',d4.shape)
         print('d3:',d3.shape)
         print('e3:',e3.shape)
