@@ -112,25 +112,36 @@ class UNet(nn.Module):
 
         d3 = self.decoder3(d4)
         e33 = self.decoder3(e3)
-        d3 = d3 + e33
+        #d3 = d3 + e33
+        print('d3:',d3.shape)
+        print('e33:',e33.shape)
+        print('----------')
         
         d2 = self.decoder2(d3)
         e32 = self.decoder2(e33)
         e22 = self.decoder2(e2)
-        d2 = d2 + e32 + e22
+        #d2 = d2 + e32 + e22
+        print('d2:',d2.shape)
+        print('e32:',e32.shape)
+        print('e22:',e22.shape)
+        print('----------')
 
         d1 = self.decoder1(d2)
         e31 = self.decoder1(e32)
         e21 = self.decoder1(e22)
         e11 = self.decoder1(e1)
-        d1 = d1 + e31 + e21 +e11
+        #d1 = d1 + e31 + e21 + e11
+        print('d1:',d1.shape)
+        print('e31:',e31.shape)
+        print('e21:',e21.shape)
+        print('e11:',e11.shape)
+        print('----------')
 
         out = self.finaldeconv1(d1)
         out = self.finalrelu1(out)
         out = self.finalconv2(out)
         out = self.finalrelu2(out)
         out = self.finalconv3(out)
-        print('----------')
         print('out:',out.shape)
         print('----------')
 
