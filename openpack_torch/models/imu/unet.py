@@ -5,7 +5,6 @@ import torch.nn as nn
 from torch.autograd import Variable
 from torchvision import models
 import torch.nn.functional as F
-from collections import OrderedDict
 from functools import partial
 
 nonlinearity = partial(F.relu,inplace=True)
@@ -92,17 +91,18 @@ class UNet(nn.Module):
         
         self.dblock = Dblock(2048)
 
-        #self.decoder4 = DecoderBlock(filters[3], filters[2])
-        #self.decoder3 = DecoderBlock(filters[2], filters[1])
-        #self.decoder2 = DecoderBlock(filters[1], filters[0])
-        #self.decoder1 = DecoderBlock(filters[0], filters[0])
+        self.decoder4 = DecoderBlock(filters[3], filters[2])
+        self.decoder3 = DecoderBlock(filters[2], filters[1])
+        self.decoder2 = DecoderBlock(filters[1], filters[0])
+        self.decoder1 = DecoderBlock(filters[0], filters[0])
 
-        self.decoder4 = Upsample(filters[3], filters[2])
-        self.decoder3 = Upsample(filters[2], filters[1])
-        self.decoder2 = Upsample(filters[1], filters[0])
-        self.decoder1 = Upsample(filters[0], filters[0])
+        #self.decoder4 = Upsample(filters[3], filters[2])
+        #self.decoder3 = Upsample(filters[2], filters[1])
+        #self.decoder2 = Upsample(filters[1], filters[0])
+        #self.decoder1 = Upsample(filters[0], filters[0])
 
-        self.finaldeconv1 = nn.ConvTranspose2d(filters[0], 32, 4, 2, 1)
+        #self.finaldeconv1 = nn.ConvTranspose2d(filters[0], 32, 4, 2, 1)
+        self.finaldeconv1 = nn.ConvTranspose2d(filters[0], 32, (1, 3), stride=(1, 2), padding=(0, 1))
         self.finalrelu1 = nonlinearity
         self.finalconv2 = nn.Conv2d(32, 32, 3, padding=1)
         self.finalrelu2 = nonlinearity
