@@ -110,15 +110,15 @@ class UNet(nn.Module):
 
         # Decoder
         m4 = self.decoder4(e4)# + e3
-        d4 = torch.cat((m4,e3),dim=1)
+        d4 = torch.cat((m4,e3),dim=0)
         d4 = self.catconv1(d4)
 
         m3 = self.decoder3(d4)# + e2
-        d3 = torch.cat((m3,e2),dim=1)
+        d3 = torch.cat((m3,e2),dim=0)
         d3 = self.catconv2(d3)
 
         m2 = self.decoder2(d3)# + e1
-        d2 = torch.cat((m2,e1),dim=1)
+        d2 = torch.cat((m2,e1),dim=0)
         d2 = self.catconv3(d2)
 
         print('d4:',d4.shape)
