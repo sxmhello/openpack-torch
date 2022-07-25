@@ -41,7 +41,7 @@ class DecoderBlock(nn.Module):
         self.relu1 = nonlinearity
 
         #self.deconv2 = nn.ConvTranspose2d(in_channels // 4, in_channels // 4, 3, stride=2, padding=1, output_padding=1)
-        self.deconv2 = nn.ConvTranspose2d(in_channels // 4, in_channels // 4, (1, 3), stride=(1, 2), padding=(0, 1)
+        self.deconv2 = nn.ConvTranspose2d(in_channels // 4, in_channels // 4, (1, 3), stride=(1, 2), padding=(0, 1))
         self.norm2 = nn.BatchNorm2d(in_channels // 4)
         self.relu2 = nonlinearity
 
