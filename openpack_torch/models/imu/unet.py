@@ -1,6 +1,5 @@
-"""
-Codes of LinkNet based on https://github.com/snakers4/spacenet-three
-"""
+from email.utils import encode_rfc2231
+from this import d
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
@@ -109,31 +108,23 @@ class UNet(nn.Module):
         e4 = self.dblock(e4)
 
         # Decoder
-        m4 = self.decoder4(e4)# + e3
-        d4 = torch.cat((m4,e3),dim=0)
-        d4 = self.catconv1(d4)
+        d4 = self.decoder4(e4)
 
-        m3 = self.decoder3(d4)# + e2
-        d3 = torch.cat((m3,e2),dim=0)
-        d3 = self.catconv2(d3)
-
-        m2 = self.decoder2(d3)# + e1
-        d2 = torch.cat((m2,e1),dim=0)
-        d2 = self.catconv3(d2)
-
-        print('d4:',d4.shape)
-        print('m4:',m4.shape)
-        print('e3:',e3.shape)
-        print('----------')
-        print('d3:',d3.shape)
-        print('m3:',m3.shape)
-        print('e2:',e2.shape)
-        print('----------')
-        print('d2:',d2.shape)
-        print('m2:',m2.shape)
-        print('e1:',e1.shape)
+        d3 = self.decoder3(d4)
+        e33 = self.decoder3(e3)
+        d3 = d3 + e33
+        
+        d2 = self.decoder2(d3)
+        e32 = self.decoder2(e33)
+        e22 = self.decoder2(e2)
+        d2 = d2 + e32 + e22
 
         d1 = self.decoder1(d2)
+        e31 = self.decoder1(e32)
+        e21 = self.decoder1(e22)
+        e11 = self.decoder1(e1)
+        d1 = d1 + e31 + e21 +e11
+
         out = self.finaldeconv1(d1)
         out = self.finalrelu1(out)
         out = self.finalconv2(out)
