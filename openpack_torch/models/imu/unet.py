@@ -104,7 +104,7 @@ class DownBlock(nn.Module):
         x_skip = self.double_conv(x)
         x_skip = self.feat_att(x_skip)
         x = self.pool(x_skip)
-        x = self.feat_att(x)
+        #x = self.feat_att(x)
         return x, x_skip
 
 
@@ -182,7 +182,7 @@ class UpBlock(nn.Module):
         # -- conv --
         x = torch.cat([x1, x2], dim=1)
         x = self.double_conv(x)
-        x = self.feat_att(x)
+        #x = self.feat_att(x)
         return x
 
 
