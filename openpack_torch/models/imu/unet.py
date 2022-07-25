@@ -2,9 +2,9 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable as V
 
-class Unet(nn.Module):
+class UNet(nn.Module):
     def __init__(self):
-        super(Unet, self).__init__()
+        super(UNet, self).__init__()
         
         self.down1 = self.conv_stage(6, 8)
         self.down2 = self.conv_stage(8, 16)
@@ -31,10 +31,10 @@ class Unet(nn.Module):
         self.trans4 = self.upsample(128, 64)
         self.trans3 = self.upsample(64, 32)
         self.trans2 = self.upsample(32, 16)
-        self.trans1 = self.upsample(16, 8)
+        self.trans1 = self.upsample(16, 13)
         
         self.conv_last = nn.Sequential(
-            nn.Conv2d(8, 10, 3, 1, 1),
+            nn.Conv2d(13, 10, 3, 1, 1),
             nn.Sigmoid()
         )
         
