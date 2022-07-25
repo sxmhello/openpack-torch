@@ -15,7 +15,7 @@ class Upsample(nn.Module):
         super(Upsample, self).__init__()
 
         self.upsample = nn.Sequential(
-            nn.conv2d(in_channels, out_channels, 1),
+            nn.Conv2d(in_channels, out_channels, 1),
             nn.Upsample(scale_factor=2, mode='nearest')
         )
 
