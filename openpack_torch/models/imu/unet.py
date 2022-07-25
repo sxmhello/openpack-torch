@@ -5,10 +5,31 @@ import torch.nn as nn
 from torch.autograd import Variable
 from torchvision import models
 import torch.nn.functional as F
-
+from collections import OrderedDict
 from functools import partial
 
 nonlinearity = partial(F.relu,inplace=True)
+
+def conv2d(filter_in, filter_out, kernel_size, stride=1):
+    pad = (kernel_size - 1) // 2 if kernel_size else 0
+    return nn.Sequential(OrderedDict([
+        ("conv", nn.Conv2d(filter_in, filter_out, kernel_size=kernel_size, stride=stride, padding=pad, bias=False)),
+        ("bn", nn.BatchNorm2d(filter_out)),
+        ("relu", nn.LeakyReLU(0.1)),
+    ]))
+
+class Upsample(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(Upsample, self).__init__()
+
+        self.upsample = nn.Sequential(
+            conv2d(in_channels, out_channels, 1),
+            nn.Upsample(scale_factor=2, mode='nearest')
+        )
+
+    def forward(self, x,):
+        x = self.upsample(x)
+        return x
 
 class Dblock(nn.Module):
     def __init__(self,channel):
@@ -79,10 +100,15 @@ class UNet(nn.Module):
         
         self.dblock = Dblock(2048)
 
-        self.decoder4 = DecoderBlock(filters[3], filters[2])
-        self.decoder3 = DecoderBlock(filters[2], filters[1])
-        self.decoder2 = DecoderBlock(filters[1], filters[0])
-        self.decoder1 = DecoderBlock(filters[0], filters[0])
+        #self.decoder4 = DecoderBlock(filters[3], filters[2])
+        #self.decoder3 = DecoderBlock(filters[2], filters[1])
+        #self.decoder2 = DecoderBlock(filters[1], filters[0])
+        #self.decoder1 = DecoderBlock(filters[0], filters[0])
+
+        self.decoder4 = Upsample(filters[3], filters[2])
+        self.decoder3 = Upsample(filters[2], filters[1])
+        self.decoder2 = Upsample(filters[1], filters[0])
+        self.decoder1 = Upsample(filters[0], filters[0])
 
         self.finaldeconv1 = nn.ConvTranspose2d(filters[0], 32, 4, 2, 1)
         self.finalrelu1 = nonlinearity
@@ -114,7 +140,9 @@ class UNet(nn.Module):
         d3 = self.decoder3(d4)
         e33 = self.decoder3(e3)
         #d3 = d3 + e33
+        print('d4:',d4.shape)
         print('d3:',d3.shape)
+        print('e3:',e3.shape)
         print('e33:',e33.shape)
         print('----------')
         
@@ -124,6 +152,7 @@ class UNet(nn.Module):
         #d2 = d2 + e32 + e22
         print('d2:',d2.shape)
         print('e32:',e32.shape)
+        print('e2:',e2.shape)
         print('e22:',e22.shape)
         print('----------')
 
@@ -135,6 +164,7 @@ class UNet(nn.Module):
         print('d1:',d1.shape)
         print('e31:',e31.shape)
         print('e21:',e21.shape)
+        print('e1:',e1.shape)
         print('e11:',e11.shape)
         print('----------')
 
