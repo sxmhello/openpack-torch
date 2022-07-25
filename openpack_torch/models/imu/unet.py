@@ -4,23 +4,6 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-class se_block(nn.Module):
-    def __init__(self, channel, ratio=16):
-        super(se_block, self).__init__()
-        self.avg_pool = nn.AdaptiveAvgPool2d(1)
-        self.fc = nn.Sequential(
-                nn.Linear(channel, channel // ratio, bias=False),
-                nn.ReLU(inplace=True),
-                nn.Linear(channel // ratio, channel, bias=False),
-                nn.Sigmoid()
-        )
-
-    def forward(self, x):
-        b, c, _, _ = x.size()
-        y = self.avg_pool(x).view(b, c)
-        y = self.fc(y).view(b, c, 1, 1)
-        return x * y
-
 
 class DownBlock(nn.Module):
     """A single down-sampling operation for U-Net's encoder.
@@ -65,7 +48,6 @@ class DownBlock(nn.Module):
             nn.ReLU(),
         )
         self.pool = nn.MaxPool2d(kernel_size=(pool_size, 1))
-        self.feat_att = se_block(out_ch)
 
     def forward(self, x: torch.Tensor):
         """
@@ -77,9 +59,7 @@ class DownBlock(nn.Module):
                  * x_skip (torch.Tensor): tensor to make a skip connection.
         """
         x_skip = self.double_conv(x)
-        x_skip = self.feat_att(x_skip)
         x = self.pool(x_skip)
-        x = self.feat_att(x)
         return x, x_skip
 
 
@@ -129,7 +109,6 @@ class UpBlock(nn.Module):
             nn.BatchNorm2d(out_ch),
             nn.ReLU(),
         )
-        self.feat_att = se_block(out_ch)
 
     def forward(self, x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
         """
@@ -157,7 +136,6 @@ class UpBlock(nn.Module):
         # -- conv --
         x = torch.cat([x1, x2], dim=1)
         x = self.double_conv(x)
-        x = self.feat_att(x)
         return x
 
 
@@ -292,7 +270,7 @@ class UNet(nn.Module):
     def __init__(
         self,
         in_ch: int = 6,
-        num_classes: int = 10, #None,
+        num_classes: int = None,
         ch_inc: int = 32,
         depth: int = 5,
     ):
