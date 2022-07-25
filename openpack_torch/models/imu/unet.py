@@ -160,7 +160,7 @@ class DownBlock(nn.Module):
 
         # Attention
         # cbam_block, eca_block, se_block
-        self.feat_att = eca_block(out_ch)
+        self.feat_att = cbam_block(out_ch)
 
     def forward(self, x: torch.Tensor):
         """
@@ -227,7 +227,7 @@ class UpBlock(nn.Module):
 
         # Attention
         # cbam_block, eca_block, se_block
-        self.feat_att = eca_block(out_ch)
+        self.feat_att = cbam_block(out_ch)
 
     def forward(self, x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
         """
