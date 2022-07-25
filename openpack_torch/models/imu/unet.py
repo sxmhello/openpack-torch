@@ -1,172 +1,96 @@
-from email.utils import encode_rfc2231
-from this import d
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
-from torchvision import models
-import torch.nn.functional as F
-from functools import partial
+from torch.autograd import Variable as V
 
-nonlinearity = partial(F.relu,inplace=True)
-
-class Upsample(nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super(Upsample, self).__init__()
-
-        self.upsample = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, 1),
-            nn.Upsample(scale_factor=2, mode='nearest')
+class Unet(nn.Module):
+    def __init__(self):
+        super(Unet, self).__init__()
+        
+        self.down1 = self.conv_stage(6, 8)
+        self.down2 = self.conv_stage(8, 16)
+        self.down3 = self.conv_stage(16, 32)
+        self.down4 = self.conv_stage(32, 64)
+        self.down5 = self.conv_stage(64, 128)
+        self.down6 = self.conv_stage(128, 256)
+        self.down7 = self.conv_stage(256, 512)
+        
+        self.center = self.conv_stage(512, 1024)
+        #self.center_res = self.resblock(1024)
+        
+        self.up7 = self.conv_stage(1024, 512)
+        self.up6 = self.conv_stage(512, 256)
+        self.up5 = self.conv_stage(256, 128)
+        self.up4 = self.conv_stage(128, 64)
+        self.up3 = self.conv_stage(64, 32)
+        self.up2 = self.conv_stage(32, 16)
+        self.up1 = self.conv_stage(16, 8)
+        
+        self.trans7 = self.upsample(1024, 512)
+        self.trans6 = self.upsample(512, 256)
+        self.trans5 = self.upsample(256, 128)
+        self.trans4 = self.upsample(128, 64)
+        self.trans3 = self.upsample(64, 32)
+        self.trans2 = self.upsample(32, 16)
+        self.trans1 = self.upsample(16, 8)
+        
+        self.conv_last = nn.Sequential(
+            nn.Conv2d(8, 10, 3, 1, 1),
+            nn.Sigmoid()
         )
-
-    def forward(self, x,):
-        x = self.upsample(x)
-        return x
-
-class Dblock(nn.Module):
-    def __init__(self,channel):
-        super(Dblock, self).__init__()
-        self.dilate1 = nn.Conv2d(channel, channel, kernel_size=3, dilation=1, padding=1)
-        self.dilate2 = nn.Conv2d(channel, channel, kernel_size=3, dilation=2, padding=2)
-        self.dilate3 = nn.Conv2d(channel, channel, kernel_size=3, dilation=4, padding=4)
-        self.dilate4 = nn.Conv2d(channel, channel, kernel_size=3, dilation=8, padding=8)
-        self.dilate5 = nn.Conv2d(channel, channel, kernel_size=3, dilation=16, padding=16)
+        
+        self.max_pool = nn.MaxPool2d(2)
+        
         for m in self.modules():
             if isinstance(m, nn.Conv2d) or isinstance(m, nn.ConvTranspose2d):
                 if m.bias is not None:
                     m.bias.data.zero_()
-                    
-    def forward(self, x):
-        dilate1_out = nonlinearity(self.dilate1(x))
-        dilate2_out = nonlinearity(self.dilate2(dilate1_out))
-        dilate3_out = nonlinearity(self.dilate3(dilate2_out))
-        dilate4_out = nonlinearity(self.dilate4(dilate3_out))
-        dilate5_out = nonlinearity(self.dilate5(dilate4_out))
-        out = x + dilate1_out + dilate2_out + dilate3_out + dilate4_out + dilate5_out
-        return out
 
-class DecoderBlock(nn.Module):
-    def __init__(self, in_channels, n_filters):
-        super(DecoderBlock,self).__init__()
+    def conv_stage(self, dim_in, dim_out, kernel_size=3, stride=1, padding=1, bias=True, useBN=False):
+        if useBN:
+            return nn.Sequential(
+              nn.Conv2d(dim_in, dim_out, kernel_size=kernel_size, stride=stride, padding=padding, bias=bias),
+              nn.BatchNorm2d(dim_out),
+              #nn.LeakyReLU(0.1),
+              nn.ReLU(),
+              nn.Conv2d(dim_out, dim_out, kernel_size=kernel_size, stride=stride, padding=padding, bias=bias),
+              nn.BatchNorm2d(dim_out),
+              #nn.LeakyReLU(0.1),
+              nn.ReLU(),
+            )
+        else:
+            return nn.Sequential(
+              nn.Conv2d(dim_in, dim_out, kernel_size=kernel_size, stride=stride, padding=padding, bias=bias),
+              nn.ReLU(),
+              nn.Conv2d(dim_out, dim_out, kernel_size=kernel_size, stride=stride, padding=padding, bias=bias),
+              nn.ReLU()
+            )
 
-        self.conv1 = nn.Conv2d(in_channels, in_channels // 4, 1)
-        self.norm1 = nn.BatchNorm2d(in_channels // 4)
-        self.relu1 = nonlinearity
-
-        #self.deconv2 = nn.ConvTranspose2d(in_channels // 4, in_channels // 4, 3, stride=2, padding=1, output_padding=1)
-        self.deconv2 = nn.ConvTranspose2d(in_channels // 4, in_channels // 4, (1, 3), stride=(1, 2), padding=(0, 1))
-        self.norm2 = nn.BatchNorm2d(in_channels // 4)
-        self.relu2 = nonlinearity
-
-        self.conv3 = nn.Conv2d(in_channels // 4, n_filters, 1)
-        self.norm3 = nn.BatchNorm2d(n_filters)
-        self.relu3 = nonlinearity
-
-    def forward(self, x):
-        x = self.conv1(x)
-        x = self.norm1(x)
-        x = self.relu1(x)
-        x = self.deconv2(x)
-        x = self.norm2(x)
-        x = self.relu2(x)
-        x = self.conv3(x)
-        x = self.norm3(x)
-        x = self.relu3(x)
-        return x
+    def upsample(self, ch_coarse, ch_fine):
+        return nn.Sequential(
+            nn.ConvTranspose2d(ch_coarse, ch_fine, 4, 2, 1, bias=False),
+            nn.ReLU()
+        )
     
-class UNet(nn.Module):
-    def __init__(self, num_classes=10):
-        super(UNet, self).__init__()
-
-        filters = [256, 512, 1024, 2048]
-        resnet = models.resnet101(pretrained=True)
-        #self.firstconv = resnet.conv1
-        self.firstconv = nn.Conv2d(6, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        self.firstbn = resnet.bn1
-        self.firstrelu = resnet.relu
-        self.firstmaxpool = resnet.maxpool
-        self.encoder1 = resnet.layer1
-        self.encoder2 = resnet.layer2
-        self.encoder3 = resnet.layer3
-        self.encoder4 = resnet.layer4
-        
-        self.dblock = Dblock(2048)
-
-        self.decoder4 = DecoderBlock(filters[3], filters[2])
-        self.decoder3 = DecoderBlock(filters[2], filters[1])
-        self.decoder2 = DecoderBlock(filters[1], filters[0])
-        self.decoder1 = DecoderBlock(filters[0], filters[0])
-
-        #self.decoder4 = Upsample(filters[3], filters[2])
-        #self.decoder3 = Upsample(filters[2], filters[1])
-        #self.decoder2 = Upsample(filters[1], filters[0])
-        #self.decoder1 = Upsample(filters[0], filters[0])
-
-        #self.finaldeconv1 = nn.ConvTranspose2d(filters[0], 32, 4, 2, 1)
-        self.finaldeconv1 = nn.ConvTranspose2d(filters[0], 32, (1, 3), stride=(1, 2), padding=(0, 1))
-        self.finalrelu1 = nonlinearity
-        self.finalconv2 = nn.Conv2d(32, 32, 3, padding=1)
-        self.finalrelu2 = nonlinearity
-        self.finalconv3 = nn.Conv2d(32, num_classes, 3, padding=1)
-
-        self.catconv1 = nn.Conv2d(filters[3], filters[2], 1)
-        self.catconv2 = nn.Conv2d(filters[2], filters[1], 1)
-        self.catconv3 = nn.Conv2d(filters[1], filters[0], 1)
-
     def forward(self, x):
-        # Encoder
-        x = self.firstconv(x)
-        x = self.firstbn(x)
-        x = self.firstrelu(x)
-        x = self.firstmaxpool(x)
-        e1 = self.encoder1(x)
-        e2 = self.encoder2(e1)
-        e3 = self.encoder3(e2)
-        e4 = self.encoder4(e3)
+        conv1_out = self.down1(x)
+        conv2_out = self.down2(self.max_pool(conv1_out))
+        conv3_out = self.down3(self.max_pool(conv2_out))
+        conv4_out = self.down4(self.max_pool(conv3_out))
+        conv5_out = self.down5(self.max_pool(conv4_out))
+        conv6_out = self.down6(self.max_pool(conv5_out))
+        conv7_out = self.down7(self.max_pool(conv6_out))
         
-        # Center
-        e4 = self.dblock(e4)
+        out = self.center(self.max_pool(conv7_out))
+        #out = self.center_res(out)
 
-        # Decoder
-        d4 = self.decoder4(e4)
+        out = self.up7(torch.cat((self.trans7(out), conv7_out), 1))
+        out = self.up6(torch.cat((self.trans6(out), conv6_out), 1))
+        out = self.up5(torch.cat((self.trans5(out), conv5_out), 1))
+        out = self.up4(torch.cat((self.trans4(out), conv4_out), 1))
+        out = self.up3(torch.cat((self.trans3(out), conv3_out), 1))
+        out = self.up2(torch.cat((self.trans2(out), conv2_out), 1))
+        out = self.up1(torch.cat((self.trans1(out), conv1_out), 1))
 
-        d3 = self.decoder3(d4)
-        e33 = self.decoder3(e3)
-        #d3 = d3 + e33
-        print('e4:',e4.shape)
-        print('d4:',d4.shape)
-        print('d3:',d3.shape)
-        print('e3:',e3.shape)
-        print('e33:',e33.shape)
-        print('----------')
-        
-        d2 = self.decoder2(d3)
-        e32 = self.decoder2(e33)
-        e22 = self.decoder2(e2)
-        #d2 = d2 + e32 + e22
-        print('d2:',d2.shape)
-        print('e32:',e32.shape)
-        print('e2:',e2.shape)
-        print('e22:',e22.shape)
-        print('----------')
-
-        d1 = self.decoder1(d2)
-        e31 = self.decoder1(e32)
-        e21 = self.decoder1(e22)
-        e11 = self.decoder1(e1)
-        #d1 = d1 + e31 + e21 + e11
-        print('d1:',d1.shape)
-        print('e31:',e31.shape)
-        print('e21:',e21.shape)
-        print('e1:',e1.shape)
-        print('e11:',e11.shape)
-        print('----------')
-
-        out = self.finaldeconv1(d1)
-        out = self.finalrelu1(out)
-        out = self.finalconv2(out)
-        out = self.finalrelu2(out)
-        out = self.finalconv3(out)
-        print('out:',out.shape)
-        print('----------')
+        out = self.conv_last(out)
 
         return out
