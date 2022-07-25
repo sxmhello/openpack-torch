@@ -1,3 +1,4 @@
+from turtle import up
 from typing import List
 
 import math
@@ -262,6 +263,82 @@ class UpBlock(nn.Module):
 # -----------------------------------------------------------------------------
 
 
+class UNetEncoder1(nn.ModuleList):
+    """
+    Attributes:
+        depth (int):
+            the number of ``DownBlock``.
+        pools ([int]):
+            list of kernel sizes for pooling.
+        conv_blocks (nn.ModuleList): list of ``DownBlock``.
+    Todo:
+        implement ``get_output_ch(block_index)`` and remove ``filters``.
+    """
+
+    def __init__(self, ch_enc: int = 32, depth: int = 5, kernel_size: int = 3):
+        super().__init__()
+        self.depth = depth
+
+        # -- main blocks --
+        input_channels = tuple(
+            [ch_enc] + [ch_enc * (2 ** i) for i in range(self.depth - 1)]
+        )  # list of input channels.
+
+        blocks = []
+        for i, in_ch in enumerate(input_channels):
+            if i == 0:
+                blocks.append(DownBlock(in_ch, in_ch, pool_size=2))
+            else:
+                blocks.append(DownBlock(in_ch, in_ch * 2, pool_size=2))
+        self.conv_blocks = nn.ModuleList(blocks)
+
+        # -- bottom --
+        in_ch = input_channels[-1] * 2
+        self.bottom = nn.Sequential(
+            nn.Conv2d(
+                in_ch,
+                in_ch * 2,
+                kernel_size=(kernel_size, 1),
+                stride=(1, 1),
+                padding=(kernel_size // 2, 0),
+            ),
+            nn.BatchNorm2d(in_ch * 2),
+            nn.ReLU(),
+            nn.Conv2d(
+                in_ch * 2,
+                in_ch * 2,
+                kernel_size=(kernel_size, 1),
+                stride=(1, 1),
+                padding=(kernel_size // 2, 0),
+            ),
+            nn.BatchNorm2d(in_ch * 2),
+            nn.ReLU(),
+        )
+        self.dblock = Dblock(in_ch)
+        
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            x (torch.Tensor): shape=(B,C,T,W)
+        Returns:
+             encoded, skip_connections
+                  * encoded (torch.Tensor): -
+                  * skip_connections (list of torch.Tensor): -
+        """
+        # -- donwnsampling blocks --
+        skip_connections = []
+        for i in range(self.depth):
+            x, x_skip = self.conv_blocks[i](x)
+            skip_connections.append(x_skip)
+
+        # -- bottom --
+        x = self.dblock(x)
+        encoded = self.bottom(x)
+
+        return encoded, skip_connections
+
+
 class UNetEncoder(nn.ModuleList):
     """
     Attributes:
@@ -336,6 +413,50 @@ class UNetEncoder(nn.ModuleList):
         encoded = self.bottom(x)
 
         return encoded, skip_connections
+
+
+class UNetDecoder1(nn.ModuleList):
+    """
+    Attributes:
+        depth (int):
+            the number of ``DownBlock``.
+        up_blocks (nn.ModuleList):
+            list of ``DownBlock``.
+    """
+
+    def __init__(self, ch_enc: int = 32, depth=5):
+        """
+        Args:
+            ch_enc (int): the output channels of the 1st conv block.
+            pools ([int]):
+                list of kernel sizes for pooling.
+        """
+        super().__init__()
+        self.depth = depth
+
+        # -- main blocks --
+        output_channels = tuple(
+            reversed([ch_enc * (2 ** i) for i in range(self.depth)])
+        )  # list of output channels.
+
+        blocks = []
+        for in_ch in output_channels:
+            blocks.append(UpBlock(in_ch * 2, in_ch))
+        self.up_blocks = nn.ModuleList(blocks)
+
+    def forward(self, x: torch.Tensor,
+                x_skips: List[torch.Tensor]) -> torch.Tensor:
+        """
+        Args:
+            x (Tensor): input
+            x_skips ([Tensor]): Output of UTimeEncoder.
+        """
+        up_sampling = []
+        for i in range(self.depth):
+            i_inv = (self.depth - 1) - i
+            x = self.up_blocks[i](x, x_skips[i_inv])
+            up_sampling.append(x)
+        return x, up_sampling
 
 
 class UNetDecoder(nn.ModuleList):
@@ -425,13 +546,19 @@ class UNet(nn.Module):
             nn.BatchNorm2d(ch_inc),
             nn.ReLU(),
         )
+        self.encoder1 = UNetEncoder1(ch_inc, depth=depth-1)
+        self.decoder1 = UNetDecoder1(ch_inc, depth=depth-1)
         self.encoder = UNetEncoder(ch_inc, depth=depth)
         self.decoder = UNetDecoder(ch_inc, depth=depth)
         self.dense_clf = nn.Conv2d(ch_inc, num_classes, 1, padding=0, stride=1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.inc(x)
-        (x, res) = self.encoder(x)
-        x = self.decoder(x, res)
-        x = self.dense_clf(x)
-        return x
+        (x1, res) = self.encoder1(x)
+        (x1, up_sampling) = self.decoder1(x1, res)
+
+        (x2, res) = self.encoder(x)
+        res1 = [up_sampling[3], up_sampling[2], up_sampling[1], up_sampling[0], res[4]]
+        x2 = self.decoder(x2, res1)
+        x2 = self.dense_clf(x2)
+        return x2
