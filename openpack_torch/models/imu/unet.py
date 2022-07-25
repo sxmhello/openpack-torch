@@ -4,6 +4,48 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from functools import partial
+nonlinearity = partial(F.relu,inplace=True)
+
+class Dblock(nn.Module):
+    def __init__(self,channel):
+        super(Dblock, self).__init__()
+        self.dilate1 = nn.Conv2d(channel, channel, kernel_size=3, dilation=1, padding=1)
+        self.dilate2 = nn.Conv2d(channel, channel, kernel_size=3, dilation=2, padding=2)
+        self.dilate3 = nn.Conv2d(channel, channel, kernel_size=3, dilation=4, padding=4)
+        self.dilate4 = nn.Conv2d(channel, channel, kernel_size=3, dilation=8, padding=8)
+        self.dilate5 = nn.Conv2d(channel, channel, kernel_size=3, dilation=16, padding=16)
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d) or isinstance(m, nn.ConvTranspose2d):
+                if m.bias is not None:
+                    m.bias.data.zero_()
+                    
+    def forward(self, x):
+        dilate1_out = nonlinearity(self.dilate1(x))
+        dilate2_out = nonlinearity(self.dilate2(dilate1_out))
+        dilate3_out = nonlinearity(self.dilate3(dilate2_out))
+        dilate4_out = nonlinearity(self.dilate4(dilate3_out))
+        dilate5_out = nonlinearity(self.dilate5(dilate4_out))
+        out = x + dilate1_out + dilate2_out + dilate3_out + dilate4_out + dilate5_out
+        return out
+
+class se_block(nn.Module):
+    def __init__(self, channel, ratio=16):
+        super(se_block, self).__init__()
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Sequential(
+                nn.Linear(channel, channel // ratio, bias=False),
+                nn.ReLU(inplace=True),
+                nn.Linear(channel // ratio, channel, bias=False),
+                nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        b, c, _, _ = x.size()
+        y = self.avg_pool(x).view(b, c)
+        y = self.fc(y).view(b, c, 1, 1)
+        return x * y
+
 
 class DownBlock(nn.Module):
     """A single down-sampling operation for U-Net's encoder.
@@ -48,6 +90,7 @@ class DownBlock(nn.Module):
             nn.ReLU(),
         )
         self.pool = nn.MaxPool2d(kernel_size=(pool_size, 1))
+        self.feat_att = se_block(out_ch)
 
     def forward(self, x: torch.Tensor):
         """
@@ -59,7 +102,9 @@ class DownBlock(nn.Module):
                  * x_skip (torch.Tensor): tensor to make a skip connection.
         """
         x_skip = self.double_conv(x)
+        x_skip = self.feat_att(x_skip)
         x = self.pool(x_skip)
+        x = self.feat_att(x)
         return x, x_skip
 
 
@@ -109,6 +154,7 @@ class UpBlock(nn.Module):
             nn.BatchNorm2d(out_ch),
             nn.ReLU(),
         )
+        self.feat_att = se_block(out_ch)
 
     def forward(self, x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
         """
@@ -136,6 +182,7 @@ class UpBlock(nn.Module):
         # -- conv --
         x = torch.cat([x1, x2], dim=1)
         x = self.double_conv(x)
+        x = self.feat_att(x)
         return x
 
 
@@ -192,6 +239,8 @@ class UNetEncoder(nn.ModuleList):
             nn.BatchNorm2d(in_ch * 2),
             nn.ReLU(),
         )
+        self.dblock = Dblock(in_ch)
+        
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -209,6 +258,7 @@ class UNetEncoder(nn.ModuleList):
             skip_connections.append(x_skip)
 
         # -- bottom --
+        x = self.dblock(x)
         encoded = self.bottom(x)
 
         return encoded, skip_connections
@@ -270,7 +320,7 @@ class UNet(nn.Module):
     def __init__(
         self,
         in_ch: int = 6,
-        num_classes: int = None,
+        num_classes: int = 10, #None,
         ch_inc: int = 32,
         depth: int = 5,
     ):
