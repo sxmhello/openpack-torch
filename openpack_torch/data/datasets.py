@@ -143,12 +143,12 @@ class OpenPackImu(torch.utils.data.Dataset):
         * Normalize [-3G, +3G] into [0, 1].
         """
         # NOTE: Normalize ACC data. ([-3G, +3G] -> [0, 1])
-        for seq_dict in self.data:
-            x = seq_dict.get("data")
-            x = np.clip(x, -3, +3)
-            x = (x + 3.) / 6.
-            seq_dict["data"] = x
-        #logger.warning("No preprocessing is applied.")
+        #for seq_dict in self.data:
+        #    x = seq_dict.get("data")
+        #    x = np.clip(x, -3, +3)
+        #    x = (x + 3.) / 6.
+        #    seq_dict["data"] = x
+        logger.warning("No preprocessing is applied.")
 
     @property
     def num_classes(self) -> int:
