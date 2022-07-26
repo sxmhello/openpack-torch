@@ -7,7 +7,7 @@ devices:
 - atr01
 - atr02
 acc: true
-#gyro: false
-gyro: true
-#quat: false
-quat: true
+gyro: false
+#gyro: true
+quat: false
+#quat: true
