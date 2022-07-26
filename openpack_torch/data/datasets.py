@@ -139,13 +139,7 @@ class OpenPackImu(torch.utils.data.Dataset):
     def preprocessing(self) -> None:
         """This method is called after ``load_dataset()`` and apply preprocessing to loaded data.
         """
-        # NOTE: Normalize ACC data. ([-3G, +3G] -> [0, 1])
-        for seq_dict in self.data:
-            x = seq_dict.get("data")
-            x = np.clip(x, -3, +3)
-            x = (x + 3.) / 6.
-            seq_dict["data"] = x
-        #logger.warning("No preprocessing is applied.")
+        logger.warning("No preprocessing is applied.")
 
     @property
     def num_classes(self) -> int:
