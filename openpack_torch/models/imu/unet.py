@@ -516,9 +516,9 @@ class UNet(nn.Module):
     def __init__(
         self,
         #in_ch: int = 6,
-        in_ch: int = 12,
+        in_ch: int = 40,
         num_classes: int = 10, #None,
-        ch_inc: int = 32,
+        ch_inc: int = 64,
         depth: int = 5,
     ):
         """
