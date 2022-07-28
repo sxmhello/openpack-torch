@@ -9,7 +9,7 @@ devices:
 - atr03
 - atr04
 acc: true
-gyro: false
-#gyro: true
-quat: false
-#quat: true
+#gyro: false
+gyro: true
+#quat: false
+quat: true
